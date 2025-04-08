@@ -3,6 +3,40 @@ from PIL import Image
 import math as math
 import re
 
+w=8000
+h=8000
+def rot_trans(ver, alpha, beta, gamma, tx, ty, tz):
+    alpha = np.radians(alpha)
+    beta = np.radians(beta)
+    gamma = np.radians(gamma)
+    # Матрица поворота вокруг X
+    Rx = np.array([
+        [1, 0, 0],
+        [0, math.cos(alpha), math.sin(alpha)],
+        [0, -math.sin(alpha), math.cos(alpha)]
+    ])
+
+    # Матрица поворота вокруг Y
+    Ry = np.array([
+        [math.cos(beta), 0, math.sin(beta)],
+        [0, 1, 0],
+        [-math.sin(beta), 0, math.cos(beta)]
+    ])
+
+    # Матрица поворота вокруг Z
+    Rz = np.array([
+        [math.cos(gamma), math.sin(gamma), 0],
+        [-math.sin(gamma), math.cos(gamma), 0],
+        [0, 0, 1]
+    ])
+
+    # Общая матрица поворота
+    R = np.dot(Rx, np.dot(Ry, Rz))
+
+    # Применяем преобразование к каждой вершине
+    transformed = np.dot(ver, R.T) + np.array([tx, ty, tz])
+    return transformed
+
 
 def bar_coor(x0, y0, x1, y1, x2, y2, x, y):
     l0 = ((x-x2)*(y1-y2)-(x1-x2)*(y-y2))/((x0-x2)*(y1-y2)-(x1-x2)*(y0-y2))
@@ -11,18 +45,18 @@ def bar_coor(x0, y0, x1, y1, x2, y2, x, y):
     return[l0, l1, l2]
 
 def draw_triangle(img_mat, z_buffer, x0, y0, x1, y1, x2, y2, color):
-    xmin=int(min(x0, x1, x2))
-    if(xmin<0):
-        xmin=0
-    ymin = int(min(y0, y1, y2))
-    if (ymin < 0):
+    xmin = math.floor(min(x0, x1, x2))
+    if xmin < 0:
+        xmin = 0
+    ymin = math.floor(min(y0, y1, y2))
+    if ymin < 0:
         ymin = 0
-    xmax = int(max(x0, x1, x2))
-    if (xmax > 9999):
-        xmax = 10000
-    ymax = int(max(y0, y1, y2))
-    if (ymax > 9999):
-        ymax = 10000
+    xmax = math.ceil(max(x0, x1, x2))
+    if xmax > w-1:
+        xmax = w
+    ymax = math.ceil(max(y0, y1, y2))
+    if ymax > h-1:
+        ymax = h
 
     for i in range(xmin, xmax):
         for j in range(ymin, ymax):
@@ -35,6 +69,7 @@ def draw_triangle(img_mat, z_buffer, x0, y0, x1, y1, x2, y2, color):
                 if z_hat < z_buffer[i, j]:
                     img_mat[i, j] = color
                     z_buffer[i, j] = z_hat
+
 def draw_line(img_mat, x0, y0, x1, y1, color):
     xchange = False
     if (abs(x0 - x1) < abs(y0 - y1)):
@@ -73,19 +108,23 @@ def compute_normal(x0, y0, z0, x1, y1, z1, x2, y2, z2):
     return normal
 
 
-img = np.zeros((10000, 10000,3), dtype=np.uint8)
-img[0:10000,0:10000,1]=120
-z_buffer = np.full((10000, 10000), np.inf)  # Инициализация z-буфера
+img = np.zeros((h, w, 3), dtype=np.uint8)
+img[0:w,0:h,1]=120
+z_buffer = np.full((w, h), np.inf)  # Инициализация z-буфера
 
-v=[]
+ver=[]
 with open('C:\\Users\\Admin\\Desktop\\model_1.obj') as file:
     for str in file:
         splitted_str=str.split()
         if (splitted_str[0]=='v'):
-            v.append([float(splitted_str[1]), float(splitted_str[2]), float(splitted_str[3])])
+            ver.append([float(splitted_str[1]), float(splitted_str[2]), float(splitted_str[3])])
 
+v = rot_trans(ver, 0, 180, 90, 0.05, 0.011, 1)
+m=7000
+u0=w/2
+v0=h/2
 for vertex in v:
-    img[int(10000*vertex[0]+5000),int(10000*vertex[1]+5000)]=[255, 255, 255]
+    img[int((m*vertex[0])/vertex[2]+u0),int((m*vertex[1])/vertex[2]+v0)]=[255, 255, 255]
 
 f=[]
 with open('C:\\Users\\Admin\\Desktop\\model_1.obj') as file:
@@ -105,12 +144,9 @@ for face in f:
     x1=v[face[1] - 1][0]
     y1 = v[face[1] - 1][1]
     z1 = v[face[1] - 1][2]
-    # draw_line(img, 30000*y0+5000, 30000*x0+5000, 30000*y1+5000, 30000*x1+5000, [255,255,255])
     x2=v[face[2]-1][0]
     y2=v[face[2]-1][1]
     z2 = v[face[2] - 1][2]
-    # draw_line(img, 30000 * y0 + 5000, 30000 * x0 + 5000, 30000 * y2 + 5000, 30000 * x2 + 5000, [255, 255, 255])
-    # draw_line(img, 30000 * y1 + 5000, 30000 * x1 + 5000, 30000 * y2 + 5000, 30000 * x2 + 5000, [255, 255, 255])
     normal = compute_normal(x0, y0, z0, x1, y1, z1, x2, y2, z2)
 
     # Вычисляем косинус угла падения
@@ -120,10 +156,9 @@ for face in f:
     # Отрисовываем треугольник только если cos_angle < 0
     if cos_angle / (normal_magnitude * light_magnitude) < 0:
         color_value = int(-255 * (cos_angle / (normal_magnitude * light_magnitude)))
-        #color_value = max(0, min(255, color_value))
         color = (color_value, 255, 255)
 
-        draw_triangle(img, z_buffer, 10000*x0+5000,10000*y0+5000, 10000*x1+5000, 10000*y1+5000, 10000*x2+5000, 10000*y2+5000, color)
+        draw_triangle(img, z_buffer, m*x0/z0+u0,m*y0/z0+v0, m*x1/z1+u0, m*y1/z1+v0, m*x2/z2+u0, m*y2/z2+v0, color)
 img = Image.fromarray(img, mode='RGB')
-im_rotate = img.rotate(90)
-im_rotate.save('image.jpg')
+
+img.save('image.jpg')
