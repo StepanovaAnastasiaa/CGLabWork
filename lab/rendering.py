@@ -44,7 +44,7 @@ def bar_coor(x0, y0, x1, y1, x2, y2, x, y):
     l2 = 1-l0-l1
     return[l0, l1, l2]
 
-def draw_triangle(img_mat, z_buffer, x0, y0, x1, y1, x2, y2, color):
+def draw_triangle(img_mat, z_buffer, x0, y0, x1, y1, x2, y2, z0, z1, z2, l0, l1, l2):
     xmin = math.floor(min(x0, x1, x2))
     if xmin < 0:
         xmin = 0
@@ -67,6 +67,8 @@ def draw_triangle(img_mat, z_buffer, x0, y0, x1, y1, x2, y2, color):
 
                 # Проверка на z-буфер
                 if z_hat < z_buffer[i, j]:
+                    color_value = int(-255 * (lambdas[0]*l0+lambdas[1]*l1+lambdas[2]*l2))
+                    color = (max(0,min(color_value)), 255, 255)
                     img_mat[i, j] = color
                     z_buffer[i, j] = z_hat
 
@@ -129,13 +131,37 @@ for vertex in v:
 f=[]
 with open('C:\\Users\\Admin\\Desktop\\model_1.obj') as file:
     for str2 in file:
-        splitted_str2=re.split(r'[ /]', str2)
-
-        if (splitted_str2[0]=='f'):
-            f.append([int(splitted_str2[1]), int(splitted_str2[4]), int(splitted_str2[7])])
+        splitted_str2=str2.split()
+        if (splitted_str2[0] == 'f'):
+            res = []
+            for sp in splitted_str2:
+                s = sp.split('/')
+                if s[0].isdigit(): res.append(int(s[0]))
+            f.append(res)
 light_direction = np.array([0, 0, 1])
 light_magnitude = np.linalg.norm(light_direction)
 
+f_n = [[0] * 2 for i in range(len(f))]
+for f1 in f:
+    x0 = v[f1[0] - 1][0]
+    y0 = v[f1[0] - 1][1]
+    z0 = v[f1[0] - 1][2]
+
+    x1 = v[f1[1] - 1][0]
+    y1 = v[f1[1] - 1][1]
+    z1 = v[f1[1] - 1][2]
+    x2 = v[f1[2] - 1][0]
+    y2 = v[f1[2] - 1][1]
+    z2 = v[f1[2] - 1][2]
+    normal = compute_normal(x0, y0, z0, x1, y1, z1, x2, y2, z2)
+    f_n[f1[0]-1][1]+=normal
+    f_n[f1[1]-1][1] += normal
+    f_n[f1[2]-1][1] += normal
+    f_n[f1[0] - 1][0] += 1
+    f_n[f1[1] - 1][0] += 1
+    f_n[f1[2] - 1][0] += 1
+for i in range(len(f_n)):
+    f_n[1]/= f_n[0]
 for face in f:
     x0=v[face[0] - 1][0]
     y0 = v[face[0] - 1][1]
@@ -149,16 +175,21 @@ for face in f:
     z2 = v[face[2] - 1][2]
     normal = compute_normal(x0, y0, z0, x1, y1, z1, x2, y2, z2)
 
+    l0 = np.dot(f_n[face[0]-1][1], light_direction)/ (np.linalg.norm(f_n[face[0]-1][1]) * np.linalg.norm(light_direction))
+    l1 = np.dot(f_n[face[1] - 1][1], light_direction) / (np.linalg.norm(f_n[face[1] - 1][1]) * np.linalg.norm(light_direction))
+    l2 = np.dot(f_n[face[2] - 1][1], light_direction) / ( np.linalg.norm(f_n[face[2] - 1][1]) * np.linalg.norm(light_direction))
+
+    bl = bar_coor(x0, y0, x1, y1, )
     # Вычисляем косинус угла падения
     cos_angle = np.dot(normal, light_direction)
     normal_magnitude = np.linalg.norm(normal)
 
     # Отрисовываем треугольник только если cos_angle < 0
     if cos_angle / (normal_magnitude * light_magnitude) < 0:
-        color_value = int(-255 * (cos_angle / (normal_magnitude * light_magnitude)))
-        color = (color_value, 255, 255)
+        # color_value = int(-255 * (cos_angle / (normal_magnitude * light_magnitude)))
+        # color = (color_value, 255, 255)
 
-        draw_triangle(img, z_buffer, m*x0/z0+u0,m*y0/z0+v0, m*x1/z1+u0, m*y1/z1+v0, m*x2/z2+u0, m*y2/z2+v0, color)
+        draw_triangle(img, z_buffer, m*x0/z0+u0,m*y0/z0+v0, m*x1/z1+u0, m*y1/z1+v0, m*x2/z2+u0, m*y2/z2+v0, z0, z1, z2, l0, l1, l2)
 img = Image.fromarray(img, mode='RGB')
 
 img.save('image.jpg')
