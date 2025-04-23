@@ -119,6 +119,37 @@ def compute_normal(x0, y0, z0, x1, y1, z1, x2, y2, z2):
     return normal
 
 
+def quaternion_multiply(q1, q2):
+    a1, b1, c1, d1 = q1
+    a2, b2, c2, d2 = q2
+    return np.array([
+        a1*a2 - b1*b2 - c1*c2 - d1*d2,
+        a1*b2 + b1*a2 + c1*d2 - d1*c2,
+        a1*c2 - b1*d2 + c1*a2 + d1*b2,
+        a1*d2 + b1*c2 - c1*b2 + d1*a2
+    ])
+
+def cvant(ver, alpha, beta, gamma, tx, ty, tz):
+    alpha = np.radians(alpha)/2
+    beta = np.radians(beta)/2
+    gamma = np.radians(gamma)/2
+
+    qx = np.array([math.cos(alpha), math.sin(alpha), 0, 0])
+    qy = np.array([math.cos(beta), 0, math.sin(beta), 0])
+    qz = np.array([math.cos(gamma), 0, 0, math.sin(gamma)])
+
+    q = quaternion_multiply(qx, quaternion_multiply(qy, qz))
+
+    q = q / np.linalg.norm(q)
+
+    a, b, c, d = q
+    R = np.array([
+        [a * a + b * b - c * c - d * d, 2 * (b * c - a * d), 2 * (b * d + a * c)],
+        [2 * (b * c + a * d), a * a - b * b + c * c - d * d, 2 * (c * d - a * b)],
+        [2 * (b * d - a * c), 2 * (c * d + a * b), a * a - b * b - c * c + d * d]
+    ])
+    transform = np.dot(ver, R.T) + np.array([tx, ty, tz])
+    return transform
 img = np.zeros((h, w, 3), dtype=np.uint8)
 img[0:w,0:h,1]=120
 z_buffer = np.full((w, h), np.inf)  # Инициализация z-буфера
@@ -130,9 +161,13 @@ def draw_model(img, z_buffer, texture, w, h, m, alpha, beta, gamma, tx, ty, tz):
         for str in file:
             splitted_str=str.split()
             if (splitted_str[0]=='v'):
-                ver.append([float(splitted_str[1]), float(splitted_str[2]), float(splitted_str[3])])
+                k=[]
+                for g in splitted_str[1:]:
+                    k.append(float(g))
+                ver.append(k)
 
-    v = rot_trans(ver, alpha, beta, gamma, tx, ty, tz)
+    #v = rot_trans(ver, alpha, beta, gamma, tx, ty, tz)
+    v=cvant(ver, alpha, beta, gamma, tx, ty, tz)
     #m=7000
     u0=w/2
     v0=h/2
@@ -221,5 +256,5 @@ def draw_model(img, z_buffer, texture, w, h, m, alpha, beta, gamma, tx, ty, tz):
 
     img.save('image.jpg')
 
-draw_model(img, z_buffer, texture, w, h, 7000, 0, 180, 90, 0.05, 0.011, 1)
-#draw_model(img, z_buffer, texture, w, h, 7000, 0, 90, 120, 0.08, 0.015, 2)
+draw_model(img, z_buffer, texture, w, h, 7000, 0, 180, 270, 0.03, 0.014, 0.6)
+draw_model(img, z_buffer, texture, w, h, 7000, 150, 160, 90, 0.1, 0.02, 0.5)
